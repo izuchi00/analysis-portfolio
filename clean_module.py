@@ -1,5 +1,5 @@
 # ============================================================
-# 🧹 3️⃣ UNIVERSAL DATA CLEANING + STRUCTURED SUMMARY (Final No-Warning Version)
+# 🧹 UNIVERSAL DATA CLEANING + STRUCTURED SUMMARY (Final Streamlit-Safe Version)
 # ============================================================
 
 import numpy as np
@@ -16,6 +16,10 @@ def auto_clean_dataset(df, handle_outliers=True, cap_instead_of_drop=True):
     - Handles outliers (cap or drop)
     - Prints full summary and descriptive stats
     """
+    if df is None or not isinstance(df, pd.DataFrame):
+        display(Markdown("⚠️ **No valid DataFrame provided for cleaning.**"))
+        return None, ["⚠️ No valid DataFrame provided."]
+
     df_clean = df.copy()
     summary_log = []
 
@@ -41,15 +45,19 @@ def auto_clean_dataset(df, handle_outliers=True, cap_instead_of_drop=True):
         n_missing = df_clean[col].isna().sum()
         if n_missing > 0:
             median_value = df_clean[col].median()
-            df_clean.fillna({col: median_value}, inplace=True)
-            missing_report.append(f"🧮 Filled {n_missing} missing numeric values in '{col}' with median = {median_value:.3f}")
+            df_clean[col].fillna(median_value, inplace=True)
+            missing_report.append(
+                f"🧮 Filled {n_missing} missing numeric values in '{col}' with median = {median_value:.3f}"
+            )
 
     for col in categorical_cols:
         n_missing = df_clean[col].isna().sum()
         if n_missing > 0:
             mode_value = df_clean[col].mode()[0] if not df_clean[col].mode().empty else "Unknown"
-            df_clean.fillna({col: mode_value}, inplace=True)
-            missing_report.append(f"🔤 Filled {n_missing} missing categorical values in '{col}' with mode = '{mode_value}'")
+            df_clean[col].fillna(mode_value, inplace=True)
+            missing_report.append(
+                f"🔤 Filled {n_missing} missing categorical values in '{col}' with mode = '{mode_value}'"
+            )
 
     total_missing_after = df_clean.isna().sum().sum()
     filled_total = int(total_missing_before - total_missing_after)
@@ -110,7 +118,6 @@ def auto_clean_dataset(df, handle_outliers=True, cap_instead_of_drop=True):
     ).fillna(0)
 
     display(Markdown("### 🧾 Column Information"))
-    # ✅ Suppress only the harmless style warning
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         if dtype_info["% Missing"].sum() > 0:
@@ -130,9 +137,12 @@ def auto_clean_dataset(df, handle_outliers=True, cap_instead_of_drop=True):
     display(Markdown("✅ **Dataset cleaned and summarized successfully!**"))
     display(df_clean.head())
 
-    return df_clean
+    return df_clean, summary_log
 
 
-# --- 🧪 Run cleaning and summary ---
-if df is not None:
-    df = auto_clean_dataset(df)
+# ============================================================
+# 🧩 Note:
+# This module no longer runs automatically.
+# It is meant to be imported and used like:
+# df_clean, log = auto_clean_dataset(df)
+# ============================================================

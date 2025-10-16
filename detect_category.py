@@ -1,5 +1,5 @@
 # ============================================================
-# 🧭 4️⃣ AUTOMATIC DATASET CATEGORY DETECTION
+# 🧭 AUTOMATIC DATASET CATEGORY DETECTION (Streamlit-Safe)
 # ============================================================
 
 import re
@@ -8,38 +8,72 @@ from IPython.display import Markdown, display
 def detect_dataset_category(df):
     """
     Automatically detect dataset type (e.g., customer, finance, sales, health, etc.)
-    based on column name patterns and data features.
+    based on column names and data features.
+    Returns a string label for the detected dataset category.
     """
 
-    # Convert column names to lowercase for consistent matching
-    cols = " ".join(df.columns.astype(str).str.lower())
+    if df is None:
+        display(Markdown("⚠️ **No dataset provided for category detection.**"))
+        return "Unknown"
 
-    # Define simple keyword groups
-    categories = {
-        "Customer / Marketing": ["gender", "age", "income", "spending", "customer", "segment", "region"],
-        "Finance / Banking": ["balance", "loan", "credit", "account", "transaction", "payment", "interest"],
-        "Healthcare / Medical": ["patient", "disease", "symptom", "diagnosis", "hospital", "treatment"],
-        "Sales / Retail": ["product", "sales", "revenue", "profit", "store", "quantity", "price"],
-        "Human Resources": ["employee", "salary", "department", "hired", "position", "performance"],
-        "Education / Academics": ["student", "grade", "exam", "score", "subject", "school"],
-        "Technology / Usage": ["user", "device", "click", "app", "session", "usage"],
+    # Convert column names to lowercase for consistent matching
+    cols = [str(c).lower() for c in df.columns]
+
+    # --- Keyword groups for category detection ---
+    category_keywords = {
+        "Customer / People": [
+            "customer", "client", "name", "gender", "age", "income",
+            "education", "segment", "marital", "occupation"
+        ],
+        "Finance / Banking": [
+            "balance", "loan", "credit", "debit", "account", "transaction",
+            "bank", "payment", "interest", "amount", "salary"
+        ],
+        "Sales / Retail": [
+            "product", "sale", "price", "discount", "revenue", "profit",
+            "category", "store", "region", "quantity", "brand"
+        ],
+        "Healthcare / Medical": [
+            "patient", "disease", "diagnosis", "treatment", "doctor",
+            "hospital", "medical", "symptom", "test", "result", "lab"
+        ],
+        "Technology / Usage": [
+            "device", "app", "usage", "session", "click", "login",
+            "duration", "user_id", "platform", "os", "browser"
+        ],
+        "Education": [
+            "student", "grade", "school", "exam", "teacher", "course",
+            "subject", "marks", "attendance"
+        ],
+        "Operations / Logistics": [
+            "shipment", "order", "supply", "warehouse", "inventory",
+            "logistic", "vehicle", "route", "delivery"
+        ],
     }
 
-    matched_category = "General / Other"
-    max_matches = 0
+    # --- Keyword matching ---
+    match_scores = {category: 0 for category in category_keywords}
 
-    for category, keywords in categories.items():
-        matches = sum(1 for kw in keywords if re.search(rf"\b{kw}\b", cols))
-        if matches > max_matches:
-            max_matches = matches
-            matched_category = category
+    for col in cols:
+        for category, keywords in category_keywords.items():
+            for keyword in keywords:
+                if re.search(rf"\b{keyword}\b", col):
+                    match_scores[category] += 1
 
-    display(Markdown(f"### 🧭 Detected Dataset Category: **{matched_category}**"))
-    return matched_category
+    # --- Determine best match ---
+    best_category = max(match_scores, key=match_scores.get)
+    if match_scores[best_category] == 0:
+        best_category = "General / Other"
+
+    display(Markdown(f"🧭 **Detected Dataset Category:** {best_category}"))
+    return best_category
 
 
-# --- Run detection ---
-if df is not None:
-    sector = detect_dataset_category(df)
-else:
-    sector = "Unknown"
+# ============================================================
+# Note:
+# ❌ Removed global "if df is not None" to prevent Streamlit crash.
+# ✅ Function now runs only when called from app.py:
+#
+# from detect_category import detect_dataset_category
+# sector = detect_dataset_category(df)
+# ============================================================
