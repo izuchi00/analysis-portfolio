@@ -1,21 +1,21 @@
 # ============================================================
-# 🧠 UNIVERSAL FEATURE DISTRIBUTION & EDA + AUTO ENCODING (SMART FINAL — STREAMLIT SAFE)
+# 📊 UNIVERSAL FEATURE DISTRIBUTION & EDA (Streamlit Version)
 # ============================================================
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from IPython.display import Markdown, display
+import streamlit as st
 
 def run_eda(df):
     """
     Perform automated exploratory data analysis and encoding.
+    Streamlit-safe version that renders visual outputs inline.
     Returns:
         df_encoded: cleaned, encoded DataFrame ready for AI use
     """
-
     if df is None or df.empty:
-        display(Markdown("⚠️ **No dataset provided for EDA.**"))
+        st.warning("⚠️ No dataset provided for EDA.")
         return None
 
     # --- Normalize column names ---
@@ -32,9 +32,9 @@ def run_eda(df):
     cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].nunique() < 20]
     num_cols = [c for c in df.columns if df[c].dtype in ['int64', 'float64'] and c not in cat_cols]
 
-    display(Markdown("### 🧾 Feature Overview"))
-    display(Markdown(f"- **Categorical columns:** {cat_cols if cat_cols else 'None detected'}"))
-    display(Markdown(f"- **Numerical columns:** {num_cols if num_cols else 'None detected'}"))
+    st.markdown("### 🧾 Feature Overview")
+    st.write(f"**Categorical columns:** {cat_cols if cat_cols else 'None detected'}")
+    st.write(f"**Numerical columns:** {num_cols if num_cols else 'None detected'}")
 
     # --- Auto-detect encoded categoricals (few unique numeric) ---
     auto_cats = [
@@ -55,10 +55,11 @@ def run_eda(df):
         df_encoded[col] = df_encoded[col].cat.codes
 
     if category_mappings:
-        display(Markdown("✅ **Categorical encodings prepared for AI/ML (`df_encoded`):**"))
-        for col, mapping in category_mappings.items():
-            mapping_text = "\n".join([f"• `{code}` → `{label}`" for code, label in mapping.items()])
-            display(Markdown(f"**{col}**\n{mapping_text}"))
+        with st.expander("📚 View Encoded Category Mappings", expanded=False):
+            for col, mapping in category_mappings.items():
+                st.markdown(f"**{col}**")
+                for code, label in mapping.items():
+                    st.markdown(f"- `{code}` → `{label}`")
 
     # --- Adaptive figure sizing ---
     def adaptive_figsize(df, n_unique=None):
@@ -74,104 +75,65 @@ def run_eda(df):
         else:
             return (8, 6)
 
-    display(Markdown("### 📊 Feature Distributions"))
+    st.markdown("### 📊 Feature Distributions")
 
-    # --- Select representative columns ---
+    # --- Plot numerical distributions ---
     if num_cols:
         num_var = df[num_cols].var().sort_values(ascending=False)
         selected_num = num_var.index[:3].tolist()
-    else:
-        selected_num = []
+        for col in selected_num:
+            fig, ax = plt.subplots(figsize=adaptive_figsize(df))
+            sns.histplot(df[col], kde=True, bins=20, color='cornflowerblue', ax=ax)
+            ax.set_title(f"Distribution of {col}")
+            st.pyplot(fig)
 
+    # --- Plot categorical distributions ---
     skip_cats = {"cluster", "segment", "id", "index", "target"}
     selected_cat = [c for c in cat_cols if c.lower() not in skip_cats][:3]
-
-    # --- Plot numerical distributions ---
-    for col in selected_num:
-        plt.figure(figsize=adaptive_figsize(df))
-        sns.histplot(df[col], kde=True, bins=20, color='cornflowerblue', alpha=0.7)
-        plt.title(f"Distribution of {col}")
-        plt.xlabel(col)
-        plt.ylabel("Count")
-        plt.tight_layout()
-        plt.show()
-
-    # --- Plot categorical distributions (smart detection for year-like columns) ---
     for col in selected_cat:
         unique_vals = df[col].nunique()
-
-        # ✅ Detect and handle year-like columns properly
-        if "year" in col.lower() or "date" in col.lower() or col.lower().endswith("_span"):
-            try:
-                years = pd.to_numeric(df[col], errors="coerce").dropna()
-                if not years.empty:
-                    year_counts = years.value_counts().sort_index()
-                    plt.figure(figsize=(8, 4))
-                    sns.barplot(
-                        x=year_counts.index.astype(int),
-                        y=year_counts.values,
-                        palette="pastel"
-                    )
-                    plt.title(f"Trend over Time: {col}")
-                    plt.xlabel("Year")
-                    plt.ylabel("Count")
-                    plt.xticks(rotation=45)
-                    plt.tight_layout()
-                    plt.show()
-                    continue
-            except Exception as e:
-                print(f"⚠️ Could not parse {col} as numeric year:", e)
-
-        # ✅ Standard categorical visualization
-        plt.figure(figsize=adaptive_figsize(df, unique_vals))
+        fig, ax = plt.subplots(figsize=adaptive_figsize(df, unique_vals))
         if unique_vals > 30:
             top_values = df[col].value_counts().nlargest(15)
             sns.countplot(
                 y=col,
                 data=df[df[col].isin(top_values.index)],
                 order=top_values.index,
-                palette="pastel"
+                palette="pastel",
+                ax=ax
             )
-            plt.title(f"Top 15 Categories of {col}")
-            plt.xlabel("Count")
-            plt.ylabel(col)
+            ax.set_title(f"Top 15 Categories of {col}")
         else:
             sns.countplot(
                 x=col,
                 data=df,
                 order=df[col].value_counts().index,
-                palette="pastel"
+                palette="pastel",
+                ax=ax
             )
-            plt.title(f"Distribution of {col}")
-            plt.xlabel(col)
-            plt.ylabel("Count")
-            plt.xticks(rotation=15)
-        plt.tight_layout()
-        plt.show()
+            ax.set_title(f"Distribution of {col}")
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=15)
+        st.pyplot(fig)
 
-    # --- Optional: Correlation Heatmap & Segmentation Scatter ---
+    # --- Correlation Heatmap ---
     if len(num_cols) >= 2:
-        display(Markdown("### 🔥 Correlation Heatmap (Numerical Features)"))
-        plt.figure(figsize=(6, 5))
-        sns.heatmap(df[num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f", square=True)
-        plt.title("Correlation Heatmap of Numerical Features")
-        plt.tight_layout()
-        plt.show()
+        st.markdown("### 🔥 Correlation Heatmap (Numerical Features)")
+        fig, ax = plt.subplots(figsize=(6, 5))
+        sns.heatmap(df[num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f", square=True, ax=ax)
+        st.pyplot(fig)
 
-        display(Markdown("### 🎯 Initial Segmentation Hint"))
-        plt.figure(figsize=(6, 5))
+        st.markdown("### 🎯 Initial Segmentation Hint")
+        fig, ax = plt.subplots(figsize=(6, 5))
         sns.scatterplot(
             x=num_cols[0],
             y=num_cols[1],
             data=df,
             alpha=0.6,
             color="teal",
-            edgecolor=None
+            edgecolor=None,
+            ax=ax
         )
-        plt.title(f"Segmentation Hint: {num_cols[0]} vs {num_cols[1]}")
-        plt.tight_layout()
-        plt.show()
+        st.pyplot(fig)
 
-    display(Markdown("✅ **EDA Complete** — Encoded DataFrame ready for AI summary and chat."))
-
+    st.success("✅ EDA Complete — Encoded DataFrame ready for AI summary and chat.")
     return df_encoded
