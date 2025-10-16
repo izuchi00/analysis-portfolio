@@ -8,7 +8,7 @@ from groq import Groq
 import os
 
 # --- Import custom modules ---
-from clean_module import auto_clean_dataset          # ✅ corrected name
+from clean_module import auto_data_clean          # ✅ corrected name
 from detect_category import detect_dataset_category
 from eda_module import run_eda
 from ai_summary_module import generate_ai_summary
