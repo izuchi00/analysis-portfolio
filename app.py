@@ -49,7 +49,7 @@ if uploaded:
 
     # --- 1️⃣ Data cleaning ---
     st.subheader("🧹 Data Cleaning")
-    df_clean, clean_log = auto_clean_dataset(df)   # ✅ updated call + receives log
+    df_clean = auto_data_clean(df)   # ✅ updated call + receives log
 
     if df_clean is not None:
         with st.expander("🧩 View Cleaning Log", expanded=False):
