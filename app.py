@@ -52,9 +52,6 @@ if uploaded:
     df_clean = auto_data_clean(df)   # ✅ updated call + receives log
 
     if df_clean is not None:
-        with st.expander("🧩 View Cleaning Log", expanded=False):
-            for line in clean_log:
-                st.markdown(f"- {line}")
 
         # --- 2️⃣ Category detection ---
         sector = detect_dataset_category(df_clean)
