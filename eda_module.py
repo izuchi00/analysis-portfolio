@@ -71,7 +71,7 @@ def run_eda(df):
         elif n < 10000:
             return (5, 3)
         elif n < 50000:
-            return (6 3.5)
+            return (6, 3.5)
         else:
             return (7, 4)
 
