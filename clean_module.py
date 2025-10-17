@@ -4,7 +4,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 
-def clean_data_with_visuals(df):
+def auto_data_clean(df):
     if df is None or df.empty:
         st.warning("⚠️ No dataset loaded for cleaning.")
         return None
