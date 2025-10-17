@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 from groq import Groq
 import os
+import pdfplumber
 
 # --- Import custom modules ---
 from clean_module import auto_data_clean          # ✅ corrected name
@@ -34,18 +35,34 @@ uploaded = st.file_uploader("📁 Upload your CSV or Excel dataset", type=["csv"
 
 if uploaded:
     try:
+        # --- Handle PDF files separately ---
         if uploaded.name.endswith(".pdf"):
-            st.warning("⚠️ PDF files aren't supported yet. Please upload a CSV or Excel dataset.")
-            st.stop()
+            with pdfplumber.open(uploaded) as pdf:
+                all_tables = []
+                for i, page in enumerate(pdf.pages):
+                    table = page.extract_table()
+                    if table:
+                        df_page = pd.DataFrame(table[1:], columns=table[0])
+                        all_tables.append(df_page)
+                if all_tables:
+                    df = pd.concat(all_tables, ignore_index=True)
+                    st.success(f"✅ Extracted {len(all_tables)} table(s) from **'{uploaded.name}'** successfully!")
+                    st.dataframe(df.head())
+                else:
+                    st.warning("⚠️ No tables were found in this PDF. Please upload a CSV or Excel dataset instead.")
+                    st.stop()
 
+        # --- Handle CSV and Excel files ---
         elif uploaded.name.endswith(".csv"):
             df = pd.read_csv(uploaded)
+            st.success(f"✅ File **'{uploaded.name}'** uploaded successfully!")
+            st.dataframe(df.head())
+
         else:
             engine = "openpyxl" if uploaded.name.endswith("xlsx") else "xlrd"
             df = pd.read_excel(uploaded, engine=engine)
-
-        st.success(f"✅ File **'{uploaded.name}'** uploaded successfully!")
-        st.dataframe(df.head())
+            st.success(f"✅ File **'{uploaded.name}'** uploaded successfully!")
+            st.dataframe(df.head())
 
     except Exception as e:
         st.error(f"⚠️ Error reading file: {e}")
