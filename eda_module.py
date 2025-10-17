@@ -1,5 +1,5 @@
 # ============================================================
-# 📊 UNIVERSAL FEATURE DISTRIBUTION & EDA (Streamlit Version)
+# 📊 UNIVERSAL FEATURE DISTRIBUTION & EDA (Streamlit Version + Chart Size Option)
 # ============================================================
 
 import pandas as pd
@@ -11,6 +11,7 @@ def run_eda(df):
     """
     Perform automated exploratory data analysis and encoding.
     Streamlit-safe version that renders visual outputs inline.
+    Includes user control for chart sizing.
     Returns:
         df_encoded: cleaned, encoded DataFrame ready for AI use
     """
@@ -61,19 +62,15 @@ def run_eda(df):
                 for code, label in mapping.items():
                     st.markdown(f"- `{code}` → `{label}`")
 
-    # --- Adaptive figure sizing ---
-    def adaptive_figsize(df, n_unique=None):
-        n = len(df)
-        if n_unique and n_unique > 30:
-            return (7, 3)
-        elif n < 1000:
-            return (4, 2.5)
-        elif n < 10000:
-            return (5, 3)
-        elif n < 50000:
-            return (6, 3.5)
-        else:
-            return (7, 4)
+    # --- 🧩 Chart size control ---
+    st.markdown("### 🪄 Visualization Settings")
+    size_choice = st.radio(
+        "Chart size:",
+        options=["Small", "Medium", "Large"],
+        horizontal=True
+    )
+    size_map = {"Small": (4, 2.5), "Medium": (6, 3.5), "Large": (8, 5)}
+    fig_size = size_map[size_choice]
 
     st.markdown("### 📊 Feature Distributions")
 
@@ -82,7 +79,7 @@ def run_eda(df):
         num_var = df[num_cols].var().sort_values(ascending=False)
         selected_num = num_var.index[:3].tolist()
         for col in selected_num:
-            fig, ax = plt.subplots(figsize=adaptive_figsize(df))
+            fig, ax = plt.subplots(figsize=fig_size)
             sns.histplot(df[col], kde=True, bins=20, color='cornflowerblue', ax=ax)
             ax.set_title(f"Distribution of {col}")
             st.pyplot(fig)
@@ -92,7 +89,7 @@ def run_eda(df):
     selected_cat = [c for c in cat_cols if c.lower() not in skip_cats][:3]
     for col in selected_cat:
         unique_vals = df[col].nunique()
-        fig, ax = plt.subplots(figsize=adaptive_figsize(df, unique_vals))
+        fig, ax = plt.subplots(figsize=fig_size)
         if unique_vals > 30:
             top_values = df[col].value_counts().nlargest(15)
             sns.countplot(
@@ -118,12 +115,12 @@ def run_eda(df):
     # --- Correlation Heatmap ---
     if len(num_cols) >= 2:
         st.markdown("### 🔥 Correlation Heatmap (Numerical Features)")
-        fig, ax = plt.subplots(figsize=(6, 5))
+        fig, ax = plt.subplots(figsize=fig_size)
         sns.heatmap(df[num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f", square=True, ax=ax)
         st.pyplot(fig)
 
         st.markdown("### 🎯 Initial Segmentation Hint")
-        fig, ax = plt.subplots(figsize=(6, 5))
+        fig, ax = plt.subplots(figsize=fig_size)
         sns.scatterplot(
             x=num_cols[0],
             y=num_cols[1],
