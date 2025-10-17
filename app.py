@@ -30,7 +30,7 @@ client = Groq(api_key=api_key)
 
 
 # --- File upload ---
-uploaded = st.file_uploader("📁 Upload your CSV or Excel dataset", type=["csv", "xlsx"])
+uploaded = st.file_uploader("📁 Upload your CSV or Excel dataset", type=["csv", "xlsx", "xls", "pdf"])
 
 if uploaded:
     try:
