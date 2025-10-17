@@ -82,17 +82,33 @@ def run_eda(df):
             with cols[i % 2]:
                 st.pyplot(fig, use_container_width=False)
 
-    # --- Categorical distributions ---
+        # --- Plot categorical distributions (improved readability) ---
     skip_cats = {"cluster", "segment", "id", "index", "target"}
     selected_cat = [c for c in cat_cols if c.lower() not in skip_cats][:4]
+
     for i, col in enumerate(selected_cat):
         unique_vals = df[col].nunique()
-        fig, ax = plt.subplots(figsize=fig_size)
+
+        # 📏 Auto-adjust figure size for many categories
+        dynamic_size = (
+            (fig_size[0] + min(unique_vals / 10, 3), fig_size[1])
+            if unique_vals > 10 else fig_size
+        )
+
+        fig, ax = plt.subplots(figsize=dynamic_size)
+
+        # ✂️ Truncate long labels
+        df_display = df.copy()
+        if df_display[col].dtype == 'object':
+            df_display[col] = df_display[col].astype(str).apply(
+                lambda x: x if len(x) <= 15 else x[:12] + "..."
+            )
+
         if unique_vals > 30:
-            top_values = df[col].value_counts().nlargest(15)
+            top_values = df_display[col].value_counts().nlargest(15)
             sns.countplot(
                 y=col,
-                data=df[df[col].isin(top_values.index)],
+                data=df_display[df_display[col].isin(top_values.index)],
                 order=top_values.index,
                 palette="pastel",
                 ax=ax
@@ -101,15 +117,19 @@ def run_eda(df):
         else:
             sns.countplot(
                 x=col,
-                data=df,
-                order=df[col].value_counts().index,
+                data=df_display,
+                order=df_display[col].value_counts().index,
                 palette="pastel",
                 ax=ax
             )
             ax.set_title(f"Distribution of {col}")
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=15, fontsize=8)
+
+            # 🔁 Rotate & resize x labels for readability
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha='right', fontsize=8)
+
         with cols[i % 2]:
             st.pyplot(fig, use_container_width=False)
+
 
     # --- Correlation Heatmap ---
     if len(num_cols) >= 2:
