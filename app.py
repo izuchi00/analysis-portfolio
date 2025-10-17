@@ -7,6 +7,7 @@ import pandas as pd
 from groq import Groq
 import os
 import pdfplumber
+import io
 
 # --- Import custom modules ---
 from clean_module import auto_data_clean          # ✅ corrected name
@@ -31,78 +32,88 @@ client = Groq(api_key=api_key)
 
 
 # --- File upload ---
-uploaded = st.file_uploader("📁 Upload your CSV or Excel dataset", type=["csv", "xlsx", "xls", "pdf"])
+st.markdown("### 📂 Upload your CSV, Excel, or PDF dataset")
 
-if uploaded:
+uploaded = st.file_uploader(
+    "Drag and drop your file here",
+    type=["csv", "xlsx", "xls", "pdf"],
+    accept_multiple_files=False
+)
+
+def safe_load_file(uploaded_file):
+    """Safely load CSV, XLSX, XLS, or PDF with dependency checks and clear feedback."""
+    import importlib
+    import pandas as pd
+    import io
+
+    file_name = uploaded_file.name.lower()
+
     try:
-        # --- Handle PDF files separately ---
-        if uploaded.name.endswith(".pdf"):
-            with pdfplumber.open(uploaded) as pdf:
-                all_tables = []
+        # --- CSV ---
+        if file_name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+            st.success(f"✅ CSV file **{uploaded_file.name}** loaded successfully!")
+            return df
+
+        # --- XLSX ---
+        elif file_name.endswith(".xlsx"):
+            if importlib.util.find_spec("openpyxl") is None:
+                st.error("⚠️ Missing dependency: `openpyxl` is required for .xlsx files.\nRun `pip install openpyxl`.")
+                return None
+            df = pd.read_excel(uploaded_file, engine="openpyxl")
+            st.success(f"✅ Excel file **{uploaded_file.name}** loaded successfully!")
+            return df
+
+        # --- XLS ---
+        elif file_name.endswith(".xls"):
+            if importlib.util.find_spec("xlrd") is None:
+                st.error("⚠️ Missing dependency: `xlrd>=2.0.1` is required for .xls files.\nRun `pip install xlrd`.")
+                return None
+            df = pd.read_excel(uploaded_file, engine="xlrd")
+            st.success(f"✅ Legacy Excel file **{uploaded_file.name}** loaded successfully!")
+            return df
+
+        # --- PDF ---
+        elif file_name.endswith(".pdf"):
+            if importlib.util.find_spec("pdfplumber") is None:
+                st.error("⚠️ Missing dependency: `pdfplumber` is required for PDFs.\nRun `pip install pdfplumber`.")
+                return None
+
+            import pdfplumber
+            all_tables = []
+            with pdfplumber.open(uploaded_file) as pdf:
                 for i, page in enumerate(pdf.pages):
                     table = page.extract_table()
                     if table:
                         df_page = pd.DataFrame(table[1:], columns=table[0])
                         all_tables.append(df_page)
-                if all_tables:
-                    df = pd.concat(all_tables, ignore_index=True)
-                    st.success(f"✅ Extracted {len(all_tables)} table(s) from **'{uploaded.name}'** successfully!")
-                    st.dataframe(df.head())
-                else:
-                    st.warning("⚠️ No tables were found in this PDF. Please upload a CSV or Excel dataset instead.")
-                    st.stop()
 
-        # --- Handle CSV and Excel files ---
-        elif uploaded.name.endswith(".csv"):
-            df = pd.read_csv(uploaded)
-            st.success(f"✅ File **'{uploaded.name}'** uploaded successfully!")
-            st.dataframe(df.head())
+            if all_tables:
+                df = pd.concat(all_tables, ignore_index=True)
+                st.success(f"✅ Extracted {len(all_tables)} table(s) from **{uploaded_file.name}** successfully!")
+                return df
+            else:
+                st.warning("⚠️ No readable tables were found in this PDF.")
+                return None
 
+        # --- Unsupported ---
         else:
-            engine = "openpyxl" if uploaded.name.endswith("xlsx") else "xlrd"
-            df = pd.read_excel(uploaded, engine=engine)
-            st.success(f"✅ File **'{uploaded.name}'** uploaded successfully!")
-            st.dataframe(df.head())
+            st.error("❌ Unsupported file type. Please upload a CSV, XLSX, XLS, or PDF file.")
+            return None
 
     except Exception as e:
-        st.error(f"⚠️ Error reading file: {e}")
-        st.stop()
+        st.error(f"❌ Error reading file: {str(e)}")
+        return None
 
 
-    # --- 1️⃣ Data cleaning ---
-    st.subheader("🧹 Data Cleaning")
-    df_clean = auto_data_clean(df)   # ✅ updated call + receives log
+# --- Load and preview file ---
+if uploaded:
+    df = safe_load_file(uploaded)
 
-    if df_clean is not None:
-
-        # --- 2️⃣ Category detection ---
-        sector = detect_dataset_category(df_clean)
-        st.info(f"🧭 Detected dataset category: **{sector}**")
-
-        # --- 3️⃣ Exploratory Data Analysis ---
-        st.subheader("📈 Exploratory Data Analysis")
-        df_for_ai = run_eda(df_clean)
-
-        # --- 4️⃣ AI Summary ---
-        st.subheader("🧠 AI Dataset Summary")
-        ai_summary, insights = generate_ai_summary(client, df_clean, sector)
-        st.markdown(ai_summary)
-
-        # --- 5️⃣ Guided Chat ---
-        st.subheader("💬 Basic Dataset Chat")
-        launch_basic_chat(client, ai_summary, insights, df_for_ai, sector)
-
-        # --- 6️⃣ Call-to-action ---
-        st.markdown("""
-        ---
-        ### 🚀 Next Steps
-        For deeper **AI-driven analytics**, **predictive modeling**, or **custom dashboards**,  
-        please **[contact or hire me](#)** to unlock the advanced modules.
-        ---
-        """)
-
+    if df is not None:
+        st.dataframe(df.head())
     else:
-        st.error("❌ Cleaning failed. Please check your dataset format and retry.")
-
+        st.stop()
 else:
     st.info("👆 Upload a dataset to begin your analysis.")
+

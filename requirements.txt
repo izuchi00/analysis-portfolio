@@ -10,3 +10,4 @@ openpyxl
 altair
 ipython
 pdfplumber
+xlrd>=2.0.1
