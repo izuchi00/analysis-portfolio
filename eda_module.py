@@ -1,5 +1,5 @@
 # ============================================================
-# 📊 UNIVERSAL FEATURE DISTRIBUTION & EDA (Streamlit Version + Chart Size Option)
+# 📊 UNIVERSAL FEATURE DISTRIBUTION & EDA (Streamlit Version - Responsive & Compact)
 # ============================================================
 
 import pandas as pd
@@ -9,11 +9,8 @@ import streamlit as st
 
 def run_eda(df):
     """
-    Perform automated exploratory data analysis and encoding.
-    Streamlit-safe version that renders visual outputs inline.
-    Includes user control for chart sizing.
-    Returns:
-        df_encoded: cleaned, encoded DataFrame ready for AI use
+    Responsive, Streamlit-safe EDA with chart size control.
+    Returns encoded DataFrame ready for AI processing.
     """
     if df is None or df.empty:
         st.warning("⚠️ No dataset provided for EDA.")
@@ -29,7 +26,7 @@ def run_eda(df):
         .str.strip("_")
     )
 
-    # --- Detect categorical & numerical columns ---
+    # --- Detect column types ---
     cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].nunique() < 20]
     num_cols = [c for c in df.columns if df[c].dtype in ['int64', 'float64'] and c not in cat_cols]
 
@@ -37,7 +34,7 @@ def run_eda(df):
     st.write(f"**Categorical columns:** {cat_cols if cat_cols else 'None detected'}")
     st.write(f"**Numerical columns:** {num_cols if num_cols else 'None detected'}")
 
-    # --- Auto-detect encoded categoricals (few unique numeric) ---
+    # --- Auto-detect encoded categoricals ---
     auto_cats = [
         c for c in df.columns
         if (df[c].dtype in ['int64', 'float64']) and (2 <= df[c].nunique() <= 10)
@@ -48,46 +45,47 @@ def run_eda(df):
 
     # --- Create encoded copy for AI ---
     df_encoded = df.copy()
-    category_mappings = {}
     for col in cat_cols:
-        df_encoded[col] = df_encoded[col].astype('category')
-        mapping = dict(enumerate(df_encoded[col].cat.categories))
-        category_mappings[col] = mapping
-        df_encoded[col] = df_encoded[col].cat.codes
+        df_encoded[col] = df_encoded[col].astype('category').cat.codes
 
-    if category_mappings:
-        with st.expander("📚 View Encoded Category Mappings", expanded=False):
-            for col, mapping in category_mappings.items():
-                st.markdown(f"**{col}**")
-                for code, label in mapping.items():
-                    st.markdown(f"- `{code}` → `{label}`")
-
-    # --- 🧩 Chart size control ---
+    # --- Chart size control ---
     st.markdown("### 🪄 Visualization Settings")
     size_choice = st.radio(
         "Chart size:",
-        options=["Small", "Medium", "Large"],
+        ["Tiny", "Small", "Medium", "Large"],
+        index=1,
         horizontal=True
     )
-    size_map = {"Small": (4, 2.5), "Medium": (6, 3.5), "Large": (8, 5)}
+    size_map = {
+        "Tiny": (3, 2),
+        "Small": (4, 2.5),
+        "Medium": (6, 3.5),
+        "Large": (8, 5)
+    }
     fig_size = size_map[size_choice]
 
+    # --- Section: Feature Distributions ---
     st.markdown("### 📊 Feature Distributions")
 
-    # --- Plot numerical distributions ---
+    cols = st.columns(2)  # side-by-side layout
+
+    # --- Numerical distributions ---
     if num_cols:
         num_var = df[num_cols].var().sort_values(ascending=False)
-        selected_num = num_var.index[:3].tolist()
-        for col in selected_num:
+        selected_num = num_var.index[:4].tolist()
+        for i, col in enumerate(selected_num):
             fig, ax = plt.subplots(figsize=fig_size)
             sns.histplot(df[col], kde=True, bins=20, color='cornflowerblue', ax=ax)
             ax.set_title(f"Distribution of {col}")
-            st.pyplot(fig)
+            ax.tick_params(labelsize=8)
+            ax.set_xlabel(col, fontsize=9)
+            with cols[i % 2]:
+                st.pyplot(fig, use_container_width=False)
 
-    # --- Plot categorical distributions ---
+    # --- Categorical distributions ---
     skip_cats = {"cluster", "segment", "id", "index", "target"}
-    selected_cat = [c for c in cat_cols if c.lower() not in skip_cats][:3]
-    for col in selected_cat:
+    selected_cat = [c for c in cat_cols if c.lower() not in skip_cats][:4]
+    for i, col in enumerate(selected_cat):
         unique_vals = df[col].nunique()
         fig, ax = plt.subplots(figsize=fig_size)
         if unique_vals > 30:
@@ -109,28 +107,16 @@ def run_eda(df):
                 ax=ax
             )
             ax.set_title(f"Distribution of {col}")
-            ax.set_xticklabels(ax.get_xticklabels(), rotation=15)
-        st.pyplot(fig)
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=15, fontsize=8)
+        with cols[i % 2]:
+            st.pyplot(fig, use_container_width=False)
 
     # --- Correlation Heatmap ---
     if len(num_cols) >= 2:
         st.markdown("### 🔥 Correlation Heatmap (Numerical Features)")
-        fig, ax = plt.subplots(figsize=fig_size)
+        fig, ax = plt.subplots(figsize=(5, 4))
         sns.heatmap(df[num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f", square=True, ax=ax)
-        st.pyplot(fig)
-
-        st.markdown("### 🎯 Initial Segmentation Hint")
-        fig, ax = plt.subplots(figsize=fig_size)
-        sns.scatterplot(
-            x=num_cols[0],
-            y=num_cols[1],
-            data=df,
-            alpha=0.6,
-            color="teal",
-            edgecolor=None,
-            ax=ax
-        )
-        st.pyplot(fig)
+        st.pyplot(fig, use_container_width=False)
 
     st.success("✅ EDA Complete — Encoded DataFrame ready for AI summary and chat.")
     return df_encoded
