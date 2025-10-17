@@ -9,3 +9,4 @@ groq
 openpyxl
 altair
 ipython
+pdfplumber
