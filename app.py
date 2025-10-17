@@ -34,11 +34,13 @@ uploaded = st.file_uploader("📁 Upload your CSV or Excel dataset", type=["csv"
 
 if uploaded:
     try:
-        # --- Load dataset automatically ---
-        if uploaded.name.endswith(".csv"):
+        if uploaded.name.endswith(".pdf"):
+            st.warning("⚠️ PDF files aren't supported yet. Please upload a CSV or Excel dataset.")
+            st.stop()
+
+        elif uploaded.name.endswith(".csv"):
             df = pd.read_csv(uploaded)
         else:
-            # Auto-handle both .xls and .xlsx
             engine = "openpyxl" if uploaded.name.endswith("xlsx") else "xlrd"
             df = pd.read_excel(uploaded, engine=engine)
 
@@ -49,10 +51,6 @@ if uploaded:
         st.error(f"⚠️ Error reading file: {e}")
         st.stop()
 
-
-    except Exception as e:
-        st.error(f"⚠️ Error reading file: {e}")
-        st.stop()
 
     # --- 1️⃣ Data cleaning ---
     st.subheader("🧹 Data Cleaning")
