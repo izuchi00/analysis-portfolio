@@ -65,15 +65,15 @@ def run_eda(df):
     def adaptive_figsize(df, n_unique=None):
         n = len(df)
         if n_unique and n_unique > 30:
-            return (10, 4)
+            return (7, 3)
         elif n < 1000:
-            return (5, 3)
+            return (4, 2.5)
         elif n < 10000:
-            return (6, 4)
+            return (5, 3)
         elif n < 50000:
-            return (7, 5)
+            return (6 3.5)
         else:
-            return (8, 6)
+            return (7, 4)
 
     st.markdown("### 📊 Feature Distributions")
 
