@@ -43,6 +43,13 @@ if uploaded:
         st.success(f"✅ File **'{uploaded.name}'** uploaded successfully!")
         st.dataframe(df.head())
 
+if uploaded.name.endswith(".csv"):
+    df = pd.read_csv(uploaded)
+else:
+    # Auto-handle both .xls and .xlsx
+    df = pd.read_excel(uploaded, engine="openpyxl" if uploaded.name.endswith("xlsx") else "xlrd")
+
+
     except Exception as e:
         st.error(f"⚠️ Error reading file: {e}")
         st.stop()
