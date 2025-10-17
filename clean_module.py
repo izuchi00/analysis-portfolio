@@ -4,15 +4,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import streamlit as st
 
-@st.cache_data
-def auto_data_clean(df):
-    st.header("🧹 Data Cleaning & Quality Check")
 
-    # -------------------------------
-    # Step 1️⃣ Normalize Column Names
-    # -------------------------------
-    st.subheader("📛 Step 1: Column Normalization")
-    st.caption("Ensures consistent and clean column naming for easy analysis.")
+# --- Core cleaning logic (cacheable) ---
+@st.cache_data
+def clean_data_core(df):
+    df = df.copy()
+
+    # Normalize column names
     df.columns = (
         df.columns.astype(str)
         .str.strip()
@@ -21,123 +19,142 @@ def auto_data_clean(df):
         .str.replace(r"__+", "_", regex=True)
         .str.strip("_")
     )
-    st.success("✅ Column names standardized successfully.")
 
+    # Fill missing values
+    for col in df.columns:
+        if df[col].isna().any():
+            if df[col].dtype in [np.float64, np.int64]:
+                fill_value = df[col].median() if abs(df[col].skew()) > 1 else df[col].mean()
+                df[col].fillna(fill_value, inplace=True)
+            else:
+                df[col].fillna(df[col].mode()[0], inplace=True)
+
+    # Cap outliers
+    for col in df.select_dtypes(include=np.number).columns:
+        lower, upper = df[col].quantile(0.01), df[col].quantile(0.99)
+        df[col] = np.clip(df[col], lower, upper)
+
+    # Drop duplicates and handle infinities
+    df.drop_duplicates(inplace=True)
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df.fillna(0, inplace=True)
+
+    return df
+
+
+# --- UI Wrapper ---
+def auto_data_clean(df):
+    st.header("🧹 Data Cleaning & Quality Check")
+
+    # --- Save mapping between original and cleaned names ---
+    original_names = df.columns.tolist()
+    cleaned_names = (
+        df.columns.astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace(r"[^a-z0-9_]", "_", regex=True)
+        .str.replace(r"__+", "_", regex=True)
+        .str.strip("_")
+    )
+    name_map = dict(zip(original_names, cleaned_names))  # {original -> cleaned}
+
+    # --- Clean data ---
     df_before = df.copy()
+    df.columns = cleaned_names
+    df_clean = clean_data_core(df)
 
-    # Tabs for modular navigation
-    tabs = st.tabs(["📋 Data Preview", "🩺 Missing Values", "🔁 Duplicates", "📈 Outlier Comparison", "📊 Summary"])
+    # --- Tabs ---
+    tabs = st.tabs(["📋 Data Preview", "🩺 Missing Values", "🔁 Duplicates", "📈 Outliers", "📊 Summary"])
 
-    # -------------------------------
-    # Step 2️⃣ Data Preview
-    # -------------------------------
+    # 1️⃣ Data preview
     with tabs[0]:
-        st.markdown("### 👀 Data Snapshot")
-        st.caption("Displays the first few rows for a quick look at your dataset.")
+        st.subheader("📋 Data Preview")
         st.dataframe(df_before.head())
-        st.info(f"Dataset shape: **{df.shape[0]} rows × {df.shape[1]} columns**")
+        st.info(f"Rows: {df_before.shape[0]}, Columns: {df_before.shape[1]}")
 
-    # -------------------------------
-    # Step 3️⃣ Missing Values
-    # -------------------------------
+    # 2️⃣ Missing values
     with tabs[1]:
-        st.markdown("### 🩺 Missing Values")
+        st.subheader("🩺 Missing Values Overview")
         st.caption("Missing data can bias analysis. We fill numeric values using mean/median and categorical with mode.")
 
-        missing_summary = df.isna().sum()
-        missing_summary = missing_summary[missing_summary > 0]
+        missing_summary = []
+        df_filled = df_before.copy()
 
-        if len(missing_summary) == 0:
-            st.success("🎉 No missing values detected.")
+        for col in df_before.columns:
+         missing_count = df_before[col].isna().sum()
+         if missing_count > 0:
+            if df_before[col].dtype in [np.float64, np.int64]:
+                # Use median for skewed numeric data, mean otherwise
+                fill_method = "Median" if abs(df_before[col].skew()) > 1 else "Mean"
+                fill_value = df_before[col].median() if fill_method == "Median" else df_before[col].mean()
+            else:
+                fill_method = "Mode"
+                fill_value = df_before[col].mode()[0]
+
+            df_filled[col].fillna(fill_value, inplace=True)
+            missing_summary.append({
+                "Column": col,
+                "Missing Count": missing_count,
+                "Fill Method": fill_method,
+                "Fill Value": fill_value if not isinstance(fill_value, (np.ndarray, pd.Series)) else fill_value.item()
+            })
+
+        if missing_summary:
+           summary_df = pd.DataFrame(missing_summary)
+           st.dataframe(summary_df)
+           st.success(f"✅ Filled missing values in {len(summary_df)} columns using mean/median/mode strategy.")
         else:
-            # Prepare table of missing value info
-            fill_data = []
-            for col, count in missing_summary.items():
-                if df[col].dtype in [np.float64, np.int64]:
-                    fill_type = "Median" if abs(df[col].skew()) > 1 else "Mean"
-                    fill_value = df[col].median() if fill_type == "Median" else df[col].mean()
-                    df[col].fillna(fill_value, inplace=True)
-                else:
-                    fill_type = "Mode"
-                    fill_value = df[col].mode()[0]
-                    df[col].fillna(fill_value, inplace=True)
-                fill_data.append((col, int(count), fill_type, round(fill_value, 2) if isinstance(fill_value, (int, float)) else str(fill_value)))
+           st.success("✅ No missing values detected.")
 
-            summary_df = pd.DataFrame(fill_data, columns=["Column", "Missing Count", "Fill Method", "Fill Value"])
-            st.dataframe(summary_df)
 
-            st.success(f"✅ Filled missing values in {len(summary_df)} columns using mean/median/mode strategy.")
-
-    # -------------------------------
-    # Step 4️⃣ Duplicates
-    # -------------------------------
+    # 3️⃣ Duplicates
     with tabs[2]:
-        st.markdown("### 🔁 Duplicate Detection & Removal")
-        st.caption("Duplicate rows can distort results. We identify and remove them safely.")
-
-        dup_count = df.duplicated().sum()
-        if dup_count == 0:
-            st.success("🎉 No duplicate rows detected.")
+        st.subheader("🔁 Duplicates Check")
+        dup_count = df_before.duplicated().sum()
+        if dup_count > 0:
+            st.warning(f"⚠️ Found {dup_count} duplicate rows. Removed during cleaning.")
         else:
-            st.warning(f"⚠️ Found **{dup_count}** duplicate rows.")
-            dup_preview = df[df.duplicated()].head(10)
-            st.dataframe(dup_preview)
-            df.drop_duplicates(inplace=True)
-            st.success(f"✅ Removed all duplicate rows. New shape: **{df.shape[0]} rows × {df.shape[1]} columns**")
+            st.success("✅ No duplicates found.")
 
-    # -------------------------------
-    # Step 5️⃣ Outliers
-    # -------------------------------
+    # 4️⃣ Outliers
     with tabs[3]:
-        st.markdown("### 📈 Outlier Comparison (Before vs After)")
-        st.caption("Outliers can distort your analysis. Here we cap values between 1st–99th percentiles for numeric columns.")
+        st.subheader("📈 Outlier Comparison (Before vs After)")
+        st.caption("Compare numeric columns before and after cleaning (1st–99th percentile capping).")
 
-        num_cols = df.select_dtypes(include=np.number).columns
+        num_cols = df_clean.select_dtypes(include=np.number).columns
         if len(num_cols) == 0:
             st.info("No numeric columns found.")
         else:
-            for col in num_cols:
-                lower, upper = df[col].quantile(0.01), df[col].quantile(0.99)
-                df[col] = np.clip(df[col], lower, upper)
+            # Use original display names but plot with cleaned names
+            display_to_cleaned = {orig: name_map[orig] for orig in original_names if name_map[orig] in num_cols}
+            selected_display = st.selectbox("Select numeric column:", list(display_to_cleaned.keys()))
+            selected_cleaned = display_to_cleaned[selected_display]
 
-            st.success("✅ Outliers capped successfully.")
+            # Sample for faster plotting
+            sample_before = df_before.rename(columns=name_map).sample(min(len(df_before), 5000))
+            sample_after = df_clean.sample(min(len(df_clean), 5000))
 
-            # Adaptive, sampled visualization
-            sample_df_before = df_before.sample(min(len(df_before), 5000), random_state=42)
-            sample_df_after = df.sample(min(len(df), 5000), random_state=42)
-
-            selected_col = st.selectbox("Select a numerical column:", num_cols, key="boxplot_select")
-
-            if selected_col in sample_df_before.columns:
+            if selected_cleaned in sample_before.columns:
                 fig, ax = plt.subplots(1, 2, figsize=(8, 3))
-                sns.boxplot(y=sample_df_before[selected_col], ax=ax[0], color="#f28b82")
-                ax[0].set_title(f"Before Cleaning ({selected_col})")
-                sns.boxplot(y=sample_df_after[selected_col], ax=ax[1], color="#81c995")
-                ax[1].set_title(f"After Cleaning ({selected_col})")
-                plt.tight_layout()
+                sns.boxplot(y=sample_before[selected_cleaned], ax=ax[0], color="salmon")
+                sns.boxplot(y=sample_after[selected_cleaned], ax=ax[1], color="lightgreen")
+                ax[0].set_title("Before Cleaning")
+                ax[1].set_title("After Cleaning")
                 st.pyplot(fig)
             else:
-                st.warning("⚠️ Selected column not found.")
+                st.warning("⚠️ Column not found after renaming. Check name normalization.")
 
-    # -------------------------------
-    # Step 6️⃣ Summary (Before vs After)
-    # -------------------------------
+    # 5️⃣ Summary
     with tabs[4]:
-        st.markdown("### 📊 Cleaning Summary")
-        st.caption("Below are key summary statistics before and after cleaning, showing how the data improved.")
-
-        df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df.fillna(0, inplace=True)
-
-        num_cols = df.select_dtypes(include=np.number).columns
+        st.subheader("📊 Summary Statistics")
+        num_cols = df_clean.select_dtypes(include=np.number).columns
         if len(num_cols) > 0:
-            st.write("#### 📉 Before Cleaning")
-            st.dataframe(df_before[num_cols].describe().T.round(2))
-            st.write("#### 📈 After Cleaning")
-            st.dataframe(df[num_cols].describe().T.round(2))
+            st.write("#### Before Cleaning")
+            st.dataframe(df_before.rename(columns=name_map)[num_cols].describe().T.round(2))
+            st.write("#### After Cleaning")
+            st.dataframe(df_clean[num_cols].describe().T.round(2))
         else:
-            st.info("No numeric data available for summary statistics.")
+            st.info("No numeric columns available.")
+        st.success(f"🎯 Final shape: {df_clean.shape[0]} rows × {df_clean.shape[1]} columns")
 
-        st.success(f"🎯 Dataset cleaned successfully! Final shape: **{df.shape[0]} rows × {df.shape[1]} columns**")
-
-    return df
+    return df_clean
