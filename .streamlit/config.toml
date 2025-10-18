@@ -1,6 +1,7 @@
 [theme]
-primaryColor = "#0E76A8"
-backgroundColor = "#F9FAFB"
-secondaryBackgroundColor = "#E8EEF2"
-textColor = "#0D0D0D"
+base = "light"
+primaryColor = "#4F46E5"        # Indigo (modern accent)
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#111827"
 font = "sans serif"

@@ -1,106 +1,123 @@
 # ============================================================
-# 🤖 CONTEXT-AWARE AI DATASET SUMMARY + SMART INSIGHTS
+# 🤖 AI SUMMARY + SMART INSIGHTS (Streamlit-Compatible)
 # ============================================================
 
+from IPython.display import Markdown, display
 import numpy as np
-import pandas as pd
-import streamlit as st
 
-def generate_ai_summary(client, df, sector="Auto-Detected"):
+def generate_ai_summary(client, df, sector="General / Unspecified"):
     """
-    Generates a contextual dataset description (based on column names & sample values)
-    plus concise insights.
+    Generate AI-powered dataset description and insights using Groq API.
+    Produces a brief narrative summary instead of a technical column list.
     """
 
     if df is None or df.empty:
-        st.warning("⚠️ No dataset provided for AI summary.")
+        display(Markdown("⚠️ **No dataset provided for AI summary.**"))
         return "No data available", []
 
-    rows, cols = df.shape
+    display(Markdown("### 🤖 Generating AI Summary & Insights..."))
 
-    # --- Detect column types ---
-    cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].nunique() < 20]
-    num_cols = [c for c in df.columns if np.issubdtype(df[c].dtype, np.number)]
-    datetime_cols = [c for c in df.columns if np.issubdtype(df[c].dtype, np.datetime64)]
+    # --- Prepare dataset info ---
+    df_summary = df.copy()
+    rows, cols = df_summary.shape
 
-    # --- Summaries for prompt ---
-    missing_pct = round(df.isna().sum().sum() / (rows * cols) * 100, 2)
-    dup_count = df.duplicated().sum()
+    drop_cols = {"cluster", "segment", "target"}
+    df_summary = df_summary[[c for c in df_summary.columns if c.lower() not in drop_cols]]
 
-    # --- Column preview (names + examples) ---
-    preview = df.head(3).to_dict(orient="records")
-    preview_text = "\n".join([str(r) for r in preview])
+    skip_cols = {"id", "index", "cluster", "segment", "target"}
+    cat_cols = [
+        c for c in df_summary.columns
+        if (df_summary[c].dtype.name == "category" or df_summary[c].nunique() < 20)
+        and c.lower() not in skip_cols
+    ]
+    num_cols = [
+        c for c in df_summary.columns
+        if (df_summary[c].dtype in ["int64", "float64"])
+        and c.lower() not in skip_cols
+        and c not in cat_cols
+    ]
 
-    # --- Build prompt ---
-    prompt = f"""
-    You are a professional data analyst. Analyze the dataset sample below and
-    generate a short (2–4 sentences) executive summary describing what this dataset
-    likely represents and what it could be used for. Be concrete and contextual
-    based on the column names and values — not generic.
-
-    Then, provide exactly 3 concise insights or analysis ideas as bullet points.
-
-    Dataset info:
+    # --- Prepare context for AI ---
+    column_context = ", ".join(df_summary.columns[:15]) + ("..." if len(df_summary.columns) > 15 else "")
+    data_context = f"""
     - Rows: {rows:,}
     - Columns: {cols}
     - Sector: {sector}
-    - Missing Values: {missing_pct}%
-    - Duplicate Rows: {dup_count}
-    - Columns: {', '.join(df.columns[:15])}{'...' if len(df.columns) > 15 else ''}
-
-    Sample rows:
-    {preview_text}
+    - Example columns: {column_context}
     """
 
+    # --- Ask AI for a short human-style summary ---
     try:
+        summary_prompt = f"""
+        You are a data analyst. Write a brief, natural-language paragraph (3–4 sentences)
+        that describes the dataset below. Mention what type of data it appears to contain,
+        its likely purpose, and potential use — *based on the context provided*.
+        Avoid listing columns or technical terms like "categorical" or "numerical".
+
+        Dataset Info:
+        {data_context}
+        """
+
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system",
-                 "content": "You summarize datasets naturally and briefly for humans — using data context and meaning, not lists."},
-                {"role": "user", "content": prompt},
+                {"role": "system", "content": "You write short, professional dataset summaries in plain English."},
+                {"role": "user", "content": summary_prompt},
             ],
-            temperature=0.5,
-            max_tokens=450,
+            temperature=0.4,
+            max_tokens=250,
         )
 
-        ai_text = getattr(response.choices[0].message, "content", "").strip()
-
-        # --- Parse output ---
-        lines = ai_text.split("\n")
-        summary, insights = "", []
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith(("•", "-", "1.", "2.", "3.")):
-                insights.append(line.strip("•- ").strip())
-            elif not summary:
-                summary = line
-
-        # --- Display in Streamlit ---
-        st.markdown("### 🧠 Executive Summary")
-        st.markdown(summary or "_No AI summary generated._")
-
-        if insights:
-            st.markdown("### 🔍 Key Insights")
-            for i, insight in enumerate(insights, 1):
-                st.markdown(f"**{i}.** {insight}")
-
-        return summary, insights
+        ai_summary_text = response.choices[0].message.content.strip()
 
     except Exception as e:
-        st.warning(f"⚠️ AI summary generation failed ({e}).")
-        fallback_summary = (
-            f"This dataset contains **{rows:,} rows** and **{cols} columns** "
-            f"with both categorical and numerical data, suitable for analysis "
-            f"in the {sector} domain."
+        ai_summary_text = (
+            f"This dataset contains **{rows:,} records** and **{cols} columns**, "
+            f"likely representing data related to the **{sector}** domain."
         )
-        fallback_insights = [
-            "Explore feature correlations to identify drivers of key metrics.",
-            "Assess trends across time or categories.",
-            "Clean missing or duplicate data before modeling."
+        display(Markdown(f"⚠️ AI summary generation failed ({e}). Using fallback."))
+
+    display(Markdown(f"### 🧠 AI Dataset Summary\n\n{ai_summary_text}"))
+
+    # --- Generate AI insights ---
+    try:
+        insight_prompt = f"""
+        You are a professional data analyst. Based on the dataset summary below,
+        provide 4 concise insights or analytical ideas (no code). Avoid generic phrasing.
+
+        Dataset Sector: {sector}
+        Dataset Summary:
+        {ai_summary_text}
+        """
+
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You generate focused analytical insights that follow from dataset summaries."
+                },
+                {"role": "user", "content": insight_prompt},
+            ],
+            temperature=0.4,
+            max_tokens=300,
+        )
+
+        ai_text = response.choices[0].message.content.strip()
+        insights = [line.strip("•- ").strip() for line in ai_text.split("\n") if line.strip()]
+
+        display(Markdown("### 🔍 Key Insights (AI-Generated):"))
+        for i, insight in enumerate(insights, 1):
+            display(Markdown(f"{i}. {insight}"))
+
+    except Exception as e:
+        display(Markdown(f"⚠️ *AI insight generation failed ({e}). Using defaults.*"))
+        insights = [
+            "Explore key trends, averages, and distributions.",
+            "Investigate feature relationships and correlations.",
+            "Identify segments, anomalies, or emerging patterns.",
+            "Analyze time-based or category-based variations."
         ]
 
-        st.markdown(fallback_summary)
-        return fallback_summary, fallback_insights
+    display(Markdown("✅ **AI Summary and Insights generated successfully.**"))
+    return ai_summary_text, insights

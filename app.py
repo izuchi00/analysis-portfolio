@@ -15,16 +15,12 @@ from ai_summary_module import generate_ai_summary
 from guided_chat_module import launch_basic_chat
 
 
-# ============================================================
-# ⚙️ PAGE SETUP
-# ============================================================
+# --- Page setup ---
 st.set_page_config(page_title="Data Analysis Portfolio", layout="wide")
 st.title("📊 Interactive Data Analysis Portfolio")
 
 
-# ============================================================
-# 🔐 SECURE API KEY
-# ============================================================
+# --- Secure API key ---
 api_key = os.getenv("GROQ_API_KEY", st.secrets.get("GROQ_API_KEY", ""))
 if not api_key:
     st.error("❌ Missing `GROQ_API_KEY`. Add it to `.streamlit/secrets.toml`.")
@@ -33,9 +29,7 @@ if not api_key:
 client = Groq(api_key=api_key)
 
 
-# ============================================================
-# 📂 FILE UPLOAD
-# ============================================================
+# --- File upload ---
 st.markdown("### 📂 Upload your CSV, Excel, or PDF dataset")
 
 uploaded = st.file_uploader(
@@ -45,13 +39,11 @@ uploaded = st.file_uploader(
 )
 
 
-# ============================================================
-# 📥 SAFE FILE LOADER
-# ============================================================
 def safe_load_file(uploaded_file):
     """Safely load CSV, XLSX, XLS, or PDF with dependency checks and clear feedback."""
     import importlib
     import pandas as pd
+    import io
 
     file_name = uploaded_file.name.lower()
 
@@ -113,57 +105,46 @@ def safe_load_file(uploaded_file):
         return None
 
 
-# ============================================================
-# 🚀 MAIN APP LOGIC
-# ============================================================
+# --- Main logic ---
 if uploaded:
     df = safe_load_file(uploaded)
 
     if df is not None:
         st.dataframe(df.head())
 
-        # --- 1️⃣ Data Cleaning ---
+        # ✅ Continue with analysis
         st.divider()
         st.subheader("🧹 Data Cleaning")
         df_clean = auto_data_clean(df)
 
         if df_clean is not None:
-            # --- 2️⃣ Detect Dataset Category ---
+            # 2️⃣ Detect dataset type
             sector = detect_dataset_category(df_clean)
             st.info(f"🧭 Detected dataset category: **{sector}**")
 
-            # --- 3️⃣ Exploratory Data Analysis ---
+            # 3️⃣ EDA
             st.subheader("📈 Exploratory Data Analysis")
             df_for_ai = run_eda(df_clean)
 
-            # --- 4️⃣ AI Dataset Summary ---
+            # 4️⃣ AI Summary
             st.subheader("🧠 AI Dataset Summary")
+            ai_summary, insights = generate_ai_summary(client, df_clean, sector)
+            st.markdown(ai_summary)
 
-            # 🧩 Cache summary to avoid re-running every refresh
-            @st.cache_data(show_spinner="🤖 Generating AI Summary...")
-            def cached_ai_summary(_client, _df, _sector):
-                return generate_ai_summary(_client, _df, _sector)
-
-            ai_summary, insights = cached_ai_summary(client, df_clean, sector)
-
-            # Display summary (already formatted inside the module)
-            st.markdown("---")
-
-            # --- 5️⃣ AI Chat Assistant ---
+            # 5️⃣ Chat
             st.subheader("💬 Basic Dataset Chat")
             launch_basic_chat(client, ai_summary, insights, df_for_ai, sector)
 
-            # --- 6️⃣ Wrap-up ---
+            # 6️⃣ Wrap-up
             st.markdown("""
             ---
             ### 🚀 Next Steps
             For deeper **AI-driven analytics**, **predictive modeling**, or **custom dashboards**,  
-            please **[contact or hire me](#)** to unlock advanced modules.
+            please **[contact or hire me](#)** to unlock the advanced modules.
             ---
             """)
 
     else:
         st.stop()
-
 else:
     st.info("👆 Upload a dataset to begin your analysis.")
