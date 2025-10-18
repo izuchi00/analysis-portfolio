@@ -1,154 +1,106 @@
 # ============================================================
-# 🤖 AI SUMMARY + SMART INSIGHTS (Groq + detect_category integrated)
+# 🤖 CONTEXT-AWARE AI DATASET SUMMARY + SMART INSIGHTS
 # ============================================================
 
-from IPython.display import Markdown, display
 import numpy as np
 import pandas as pd
+import streamlit as st
 
 def generate_ai_summary(client, df, sector="Auto-Detected"):
     """
-    Generate an AI-powered dataset summary and insights using Groq API.
-
-    Args:
-        client (Groq): Initialized Groq client.
-        df (pd.DataFrame): Dataset to summarize.
-        sector (str): Category detected by detect_category module.
-
-    Returns:
-        tuple: (structured_summary, insights)
+    Generates a contextual dataset description (based on column names & sample values)
+    plus concise insights.
     """
 
     if df is None or df.empty:
-        display(Markdown("⚠️ **No dataset provided for AI summary.**"))
+        st.warning("⚠️ No dataset provided for AI summary.")
         return "No data available", []
 
-    display(Markdown("### 🤖 Generating AI Summary & Insights..."))
+    rows, cols = df.shape
 
-    # --- Prepare DataFrame ---
-    df_summary = df.copy()
-    rows, cols = df_summary.shape
+    # --- Detect column types ---
+    cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].nunique() < 20]
+    num_cols = [c for c in df.columns if np.issubdtype(df[c].dtype, np.number)]
+    datetime_cols = [c for c in df.columns if np.issubdtype(df[c].dtype, np.datetime64)]
 
-    skip_cols = {"id", "index", "cluster", "segment", "target"}
-    cat_cols = [
-        c for c in df_summary.columns
-        if (df_summary[c].dtype.name == "category" or df_summary[c].nunique() < 20)
-        and c.lower() not in skip_cols
-    ]
-    num_cols = [
-        c for c in df_summary.columns
-        if np.issubdtype(df_summary[c].dtype, np.number)
-        and c.lower() not in skip_cols
-        and c not in cat_cols
-    ]
-    datetime_cols = [
-        c for c in df_summary.columns if np.issubdtype(df_summary[c].dtype, np.datetime64)
-    ]
+    # --- Summaries for prompt ---
+    missing_pct = round(df.isna().sum().sum() / (rows * cols) * 100, 2)
+    dup_count = df.duplicated().sum()
 
-    # --- Quality Metrics ---
-    missing_pct = df_summary.isna().sum().sum() / (rows * cols) * 100
-    dup_count = df_summary.duplicated().sum()
-    avg_corr = (
-        df_summary[num_cols].corr().abs().mean().mean()
-        if len(num_cols) > 1 else 0
-    )
+    # --- Column preview (names + examples) ---
+    preview = df.head(3).to_dict(orient="records")
+    preview_text = "\n".join([str(r) for r in preview])
 
-    # --- Top Values ---
-    cat_summary = []
-    for c in cat_cols[:3]:
-        try:
-            mode_val = df_summary[c].mode().iloc[0]
-            cat_summary.append(f"{c}: '{mode_val}'")
-        except Exception:
-            pass
+    # --- Build prompt ---
+    prompt = f"""
+    You are a professional data analyst. Analyze the dataset sample below and
+    generate a short (2–4 sentences) executive summary describing what this dataset
+    likely represents and what it could be used for. Be concrete and contextual
+    based on the column names and values — not generic.
 
-    num_summary = []
-    for c in num_cols[:3]:
-        try:
-            num_summary.append(f"{c}: avg {df_summary[c].mean():,.2f}")
-        except Exception:
-            pass
+    Then, provide exactly 3 concise insights or analysis ideas as bullet points.
 
-    # --- Date Range ---
-    date_range = ""
-    if datetime_cols:
-        try:
-            col = datetime_cols[0]
-            date_range = f"{df_summary[col].min().date()} → {df_summary[col].max().date()}"
-        except Exception:
-            pass
-    elif any("date" in c.lower() for c in df_summary.columns):
-        try:
-            col = [c for c in df_summary.columns if "date" in c.lower()][0]
-            temp = pd.to_datetime(df_summary[col], errors="coerce")
-            date_range = f"{temp.min().date()} → {temp.max().date()}"
-        except Exception:
-            pass
+    Dataset info:
+    - Rows: {rows:,}
+    - Columns: {cols}
+    - Sector: {sector}
+    - Missing Values: {missing_pct}%
+    - Duplicate Rows: {dup_count}
+    - Columns: {', '.join(df.columns[:15])}{'...' if len(df.columns) > 15 else ''}
 
-    # --- Structured Summary ---
-    structured_summary = f"""
-    Dataset has **{rows:,} rows** and **{cols:,} columns**.
-
-    **Column Overview**
-    - Categorical features: {', '.join(cat_cols) if cat_cols else 'None detected'}
-    - Numerical features: {', '.join(num_cols) if num_cols else 'None detected'}
-    - Datetime features: {', '.join(datetime_cols) if datetime_cols else 'None detected'}
-
-    **Data Quality**
-    - Missing values: {missing_pct:.1f}% of total
-    - Duplicate rows: {dup_count:,}
-    - Avg numeric correlation: {avg_corr:.2f}
-
-    **Key Patterns**
-    - Top categorical modes → {', '.join(cat_summary) if cat_summary else 'N/A'}
-    - Key numeric averages → {', '.join(num_summary) if num_summary else 'N/A'}
-    - Date range → {date_range if date_range else 'N/A'}
-
-    **Detected Sector:** {sector}
+    Sample rows:
+    {preview_text}
     """
 
-    display(Markdown(f"### 🧠 AI Summary\n{structured_summary}"))
-
-    # --- AI Commentary via Groq ---
     try:
-        ai_prompt = f"""
-        You are a professional data analyst. Given the structured dataset summary below,
-        write a concise yet insightful overview and 4 actionable analytical recommendations.
-
-        Dataset Sector: {sector}
-        Summary:
-        {structured_summary}
-        """
-
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "You analyze data and produce meaningful, structured insights."},
-                {"role": "user", "content": ai_prompt},
+                {"role": "system",
+                 "content": "You summarize datasets naturally and briefly for humans — using data context and meaning, not lists."},
+                {"role": "user", "content": prompt},
             ],
-            temperature=0.3,
-            max_tokens=400,
+            temperature=0.5,
+            max_tokens=450,
         )
 
-        ai_text = response.choices[0].message.content.strip()
+        ai_text = getattr(response.choices[0].message, "content", "").strip()
 
-        # --- Parse AI output ---
-        lines = [l.strip("•- ").strip() for l in ai_text.split("\n") if l.strip()]
-        insights = [l for l in lines if len(l) < 250][:5]
+        # --- Parse output ---
+        lines = ai_text.split("\n")
+        summary, insights = "", []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(("•", "-", "1.", "2.", "3.")):
+                insights.append(line.strip("•- ").strip())
+            elif not summary:
+                summary = line
 
-        display(Markdown("### 🔍 Key Insights (AI-Generated):"))
-        for i, insight in enumerate(insights, 1):
-            display(Markdown(f"{i}. {insight}"))
+        # --- Display in Streamlit ---
+        st.markdown("### 🧠 Executive Summary")
+        st.markdown(summary or "_No AI summary generated._")
 
-        display(Markdown("✅ **AI Summary and Insights generated successfully.**"))
+        if insights:
+            st.markdown("### 🔍 Key Insights")
+            for i, insight in enumerate(insights, 1):
+                st.markdown(f"**{i}.** {insight}")
+
+        return summary, insights
 
     except Exception as e:
-        display(Markdown(f"⚠️ *AI insight generation failed ({e}). Using defaults.*"))
-        insights = [
-            "Examine the correlation matrix to find strong relationships.",
-            "Explore time-based trends for potential seasonality.",
-            "Compare distributions across categorical groups.",
-            "Identify outliers that might affect modeling accuracy.",
+        st.warning(f"⚠️ AI summary generation failed ({e}).")
+        fallback_summary = (
+            f"This dataset contains **{rows:,} rows** and **{cols} columns** "
+            f"with both categorical and numerical data, suitable for analysis "
+            f"in the {sector} domain."
+        )
+        fallback_insights = [
+            "Explore feature correlations to identify drivers of key metrics.",
+            "Assess trends across time or categories.",
+            "Clean missing or duplicate data before modeling."
         ]
 
-    return structured_summary, insights
+        st.markdown(fallback_summary)
+        return fallback_summary, fallback_insights
