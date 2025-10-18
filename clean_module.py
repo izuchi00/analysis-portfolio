@@ -162,42 +162,67 @@ def auto_data_clean(df):
 
     # 📈 Outliers
     with tabs[2]:
-       st.subheader("📈 Outlier Comparison (Before vs After)")
-       st.caption("Outliers capped between 1st and 99th percentile for numeric columns.")
-       num_cols = df_clean.select_dtypes(include=np.number).columns
+        st.subheader("📈 Outlier Comparison (Before vs After)")
+        st.caption("Outliers capped between 1st and 99th percentile for numeric columns.")
 
-       if len(num_cols) == 0:
-        st.info("No numeric columns found.")
-       else:
-           display_to_cleaned = {orig: name_map[orig] for orig in original_names if name_map[orig] in num_cols}
-           selected_display = st.selectbox("Select numeric column:", list(display_to_cleaned.keys()))
-           selected_cleaned = display_to_cleaned[selected_display]
+        num_cols = df_clean.select_dtypes(include=np.number).columns
 
-           sample_before = df_before.rename(columns=name_map).sample(min(len(df_before), 5000))
-           sample_after = df_clean.sample(min(len(df_clean), 5000))
+        if len(num_cols) == 0:
+            st.info("No numeric columns found.")
+        else:
+            display_to_cleaned = {orig: name_map[orig] for orig in original_names if name_map[orig] in num_cols}
+            selected_display = st.selectbox("Select numeric column:", list(display_to_cleaned.keys()))
+            selected_cleaned = display_to_cleaned[selected_display]
 
-        # ✅ Validate existence and numeric data
-           if (
-               selected_cleaned not in sample_before.columns
-               or selected_cleaned not in sample_after.columns
+            # --- Chart size control (same as EDA) ---
+            st.markdown("### 🪄 Visualization Settings")
+            size_choice = st.radio(
+                "Chart size:",
+                ["Tiny", "Small", "Medium", "Large"],
+                index=2,
+                horizontal=True
+            )
+            size_map = {
+                "Tiny": (3, 2),
+                "Small": (4, 2.5),
+                "Medium": (6, 3.5),
+                "Large": (8, 5)
+            }
+            fig_size = size_map[size_choice]
+
+            # --- Sample for faster plotting ---
+            sample_before = df_before.rename(columns=name_map).sample(min(len(df_before), 5000))
+            sample_after = df_clean.sample(min(len(df_clean), 5000))
+
+            # ✅ Validate numeric column
+            if (
+                selected_cleaned not in sample_before.columns
+                or selected_cleaned not in sample_after.columns
             ):
-               st.warning(f"⚠️ Column '{selected_cleaned}' not found in one of the datasets.")
-           elif (
+                st.warning(f"⚠️ Column '{selected_cleaned}' not found in one of the datasets.")
+            elif (
                 sample_before[selected_cleaned].dropna().empty
                 or sample_after[selected_cleaned].dropna().empty
-        ):
+            ):
                 st.warning(f"⚠️ No valid numeric data available for '{selected_cleaned}'.")
-           else:
+            else:
                 try:
-                    fig, ax = plt.subplots(1, 2, figsize=(8, 3))
+                    # --- Plotting style same as EDA ---
+                    fig, ax = plt.subplots(1, 2, figsize=fig_size)
                     sns.boxplot(y=sample_before[selected_cleaned], ax=ax[0], color="salmon")
                     sns.boxplot(y=sample_after[selected_cleaned], ax=ax[1], color="lightgreen")
-                    ax[0].set_title("Before Cleaning")
-                    ax[1].set_title("After Cleaning")
-                    st.pyplot(fig, use_container_width=True)
+
+                    ax[0].set_title("Before Cleaning", fontsize=10)
+                    ax[1].set_title("After Cleaning", fontsize=10)
+                    for a in ax:
+                        a.tick_params(labelsize=8)
+                        a.set_ylabel(selected_display, fontsize=9)
+                    plt.subplots_adjust(wspace=0.8)  # Increase spacing; try 0.5 for more space    
+
+                    st.pyplot(fig, use_container_width=False)
+
                 except Exception as e:
                     st.warning(f"⚠️ Unable to plot boxplot for '{selected_cleaned}': {e}")
-
 
     # 📊 Summary
     with tabs[3]:
