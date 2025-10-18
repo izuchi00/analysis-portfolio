@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import streamlit as st
 
+
 def run_eda(df):
     """
     Responsive, Streamlit-safe EDA with chart size control.
@@ -30,9 +31,17 @@ def run_eda(df):
     cat_cols = [c for c in df.columns if df[c].dtype == 'object' or df[c].nunique() < 20]
     num_cols = [c for c in df.columns if df[c].dtype in ['int64', 'float64'] and c not in cat_cols]
 
+    # --- Section: Overview ---
+    st.markdown("<h2 style='color:#2563EB;'>📊 Exploratory Data Analysis</h2>", unsafe_allow_html=True)
+    st.caption("Automated EDA showing feature distributions, categorical summaries, and correlation heatmaps.")
+
     st.markdown("### 🧾 Feature Overview")
-    st.write(f"**Categorical columns:** {cat_cols if cat_cols else 'None detected'}")
-    st.write(f"**Numerical columns:** {num_cols if num_cols else 'None detected'}")
+    with st.container():
+        c1, c2 = st.columns(2)
+        c1.info(f"**Categorical Columns** ({len(cat_cols)}): {cat_cols if cat_cols else 'None detected'}")
+        c2.info(f"**Numerical Columns** ({len(num_cols)}): {num_cols if num_cols else 'None detected'}")
+
+    st.divider()
 
     # --- Auto-detect encoded categoricals ---
     auto_cats = [
@@ -64,10 +73,12 @@ def run_eda(df):
     }
     fig_size = size_map[size_choice]
 
-    # --- Section: Feature Distributions ---
+    st.divider()
     st.markdown("### 📊 Feature Distributions")
+    st.caption("Displays the most variable numerical and categorical features side by side for quick insights.")
 
-    cols = st.columns(2)  # side-by-side layout
+    # --- Dual-column layout ---
+    cols = st.columns(2)
 
     # --- Numerical distributions ---
     if num_cols:
@@ -75,14 +86,15 @@ def run_eda(df):
         selected_num = num_var.index[:4].tolist()
         for i, col in enumerate(selected_num):
             fig, ax = plt.subplots(figsize=fig_size)
-            sns.histplot(df[col], kde=True, bins=20, color='cornflowerblue', ax=ax)
-            ax.set_title(f"Distribution of {col}")
+            sns.histplot(df[col], kde=True, bins=20, color='#3B82F6', ax=ax)
+            ax.set_title(f"Distribution of {col}", fontsize=10, color="#1E3A8A")
             ax.tick_params(labelsize=8)
             ax.set_xlabel(col, fontsize=9)
+            plt.tight_layout()
             with cols[i % 2]:
                 st.pyplot(fig, use_container_width=False)
 
-        # --- Plot categorical distributions (improved readability) ---
+    # --- Categorical distributions ---
     skip_cats = {"cluster", "segment", "id", "index", "target"}
     selected_cat = [c for c in cat_cols if c.lower() not in skip_cats][:4]
 
@@ -110,33 +122,45 @@ def run_eda(df):
                 y=col,
                 data=df_display[df_display[col].isin(top_values.index)],
                 order=top_values.index,
-                palette="pastel",
+                palette="Blues_r",
                 ax=ax
             )
-            ax.set_title(f"Top 15 Categories of {col}")
+            ax.set_title(f"Top 15 Categories of {col}", fontsize=10, color="#1E3A8A")
         else:
             sns.countplot(
                 x=col,
                 data=df_display,
                 order=df_display[col].value_counts().index,
-                palette="pastel",
+                palette="Blues_r",
                 ax=ax
             )
-            ax.set_title(f"Distribution of {col}")
-
-            # 🔁 Rotate & resize x labels for readability
+            ax.set_title(f"Distribution of {col}", fontsize=10, color="#1E3A8A")
             ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha='right', fontsize=8)
 
+        plt.tight_layout()
         with cols[i % 2]:
             st.pyplot(fig, use_container_width=False)
 
-
     # --- Correlation Heatmap ---
     if len(num_cols) >= 2:
+        st.divider()
         st.markdown("### 🔥 Correlation Heatmap (Numerical Features)")
+        st.caption("Shows relationships between numerical variables to identify potential dependencies.")
+
         fig, ax = plt.subplots(figsize=(5, 4))
-        sns.heatmap(df[num_cols].corr(), annot=True, cmap="coolwarm", fmt=".2f", square=True, ax=ax)
+        sns.heatmap(
+            df[num_cols].corr(),
+            annot=True,
+            cmap="coolwarm",
+            fmt=".2f",
+            square=True,
+            cbar_kws={"shrink": 0.75},
+            ax=ax
+        )
+        ax.set_title("Correlation Matrix", fontsize=10, color="#1E3A8A")
+        plt.tight_layout()
         st.pyplot(fig, use_container_width=False)
 
+    st.divider()
     st.success("✅ EDA Complete — Encoded DataFrame ready for AI summary and chat.")
     return df_encoded

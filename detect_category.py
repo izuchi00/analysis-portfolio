@@ -3,7 +3,9 @@
 # ============================================================
 
 import re
+import streamlit as st
 from IPython.display import Markdown, display
+
 
 def detect_dataset_category(df):
     """
@@ -13,7 +15,7 @@ def detect_dataset_category(df):
     """
 
     if df is None:
-        display(Markdown("⚠️ **No dataset provided for category detection.**"))
+        st.warning("⚠️ No dataset provided for category detection.")
         return "Unknown"
 
     # Convert column names to lowercase for consistent matching
@@ -65,15 +67,23 @@ def detect_dataset_category(df):
     if match_scores[best_category] == 0:
         best_category = "General / Other"
 
-    display(Markdown(f"🧭 **Detected Dataset Category:** {best_category}"))
+    # --- Streamlit-friendly UI output ---
+    st.markdown("---")
+    st.markdown(
+        f"""
+        <div style="padding: 10px; border-radius: 8px; background-color: #F3F4F6; border-left: 4px solid #2563EB;">
+            <strong>🧭 Detected Dataset Category:</strong> <span style="color:#2563EB;">{best_category}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    st.markdown("---")
+
     return best_category
 
 
 # ============================================================
-# Note:
-# ❌ Removed global "if df is not None" to prevent Streamlit crash.
-# ✅ Function now runs only when called from app.py:
-#
-# from detect_category import detect_dataset_category
-# sector = detect_dataset_category(df)
+# Notes:
+# ✅ No logic changes — only visual improvements for Streamlit display.
+# ✅ Keeps compatibility with app.py integration.
 # ============================================================

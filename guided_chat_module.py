@@ -20,10 +20,21 @@ def launch_basic_chat(client, ai_summary, insights, df, sector="General"):
         sector (str): Detected dataset category
     """
 
-    st.markdown("### 💬 Guided Dataset Chat")
-    st.markdown("🧠 Choose a question below to explore dataset insights:")
+    # --- Section Header ---
+    st.markdown("<h2 style='color:#2563EB;'>💬 Guided Dataset Chat</h2>", unsafe_allow_html=True)
+    st.caption("Ask high-level interpretive questions to explore insights from your dataset.")
 
-    # --- Predefined options ---
+    with st.container():
+        st.markdown(
+            """
+            <div style="padding:10px; border-radius:8px; background-color:#F3F4F6; border-left:4px solid #2563EB;">
+                🧠 <strong>Tip:</strong> These guided prompts help you interpret data patterns without code.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("#### Choose a guided question:")
     options = [
         "Summarize dataset",
         "Explain correlations",
@@ -32,16 +43,25 @@ def launch_basic_chat(client, ai_summary, insights, df, sector="General"):
         "Next steps"
     ]
 
-    choice = st.selectbox("Choose a guided question:", options)
+    choice = st.selectbox("", options, index=0, label_visibility="collapsed")
 
-    if st.button("Ask"):
+    # --- Interaction Button ---
+    col1, col2 = st.columns([0.2, 0.8])
+    with col1:
+        ask_btn = st.button("💬 Ask", use_container_width=True)
+    with col2:
+        st.caption("Select a question and click *Ask* to get AI-powered insights.")
+
+    # --- Handle Interaction ---
+    if ask_btn:
+        st.markdown("---")
         if choice == "Next steps":
             show_next_steps(sector)
         else:
-            with st.spinner("🤖 Thinking..."):
+            with st.spinner("🤖 Thinking... generating insights..."):
                 response = groq_guided_chat(client, choice, ai_summary, insights, df, sector)
                 if response:
-                    st.success(response)
+                    st.success(response, icon="💡")
 
 
 # ============================================================
@@ -87,7 +107,9 @@ Rules:
 # ============================================================
 def show_next_steps(sector):
     """Display sector-specific advanced recommendations."""
-    st.markdown("### 🚀 Next Steps — Advanced Analysis Recommendations")
+    st.markdown("<h3 style='color:#2563EB;'>🚀 Next Steps — Advanced Analysis Recommendations</h3>", unsafe_allow_html=True)
+
+    st.caption("Suggested deeper analyses and projects tailored to your dataset category.")
 
     sector_recommendations = {
         "marketing": [
@@ -125,12 +147,19 @@ def show_next_steps(sector):
     key = sector.lower() if sector and sector.lower() in sector_recommendations else "general"
     recs = sector_recommendations[key]
 
+    st.markdown("<ul style='margin-top: 10px;'>", unsafe_allow_html=True)
     for r in recs:
-        st.markdown(f"- {r}")
+        st.markdown(f"<li>📈 {r}</li>", unsafe_allow_html=True)
+    st.markdown("</ul>", unsafe_allow_html=True)
 
-    st.markdown("""
----
-For deeper **AI-driven analytics**, predictive modeling, or automated reporting,  
-please **[contact or hire me](#)** to unlock advanced features.
----
-""")
+    st.markdown(
+        """
+        <hr style='margin-top:20px; margin-bottom:10px;'>
+        <div style="padding:10px; background-color:#F9FAFB; border-radius:8px; border-left:4px solid #2563EB;">
+            For deeper <strong>AI-driven analytics</strong>, predictive modeling, or automated reporting,<br>
+            please <a href="#" style="color:#2563EB; text-decoration:none; font-weight:500;">contact or hire me</a>
+            to unlock advanced features.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
