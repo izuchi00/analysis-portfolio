@@ -6,11 +6,9 @@ import streamlit as st
 import pandas as pd
 from groq import Groq
 import os
-import pdfplumber
-import io
 
 # --- Import custom modules ---
-from clean_module import auto_data_clean          # ✅ corrected name
+from clean_module import auto_data_clean
 from detect_category import detect_dataset_category
 from eda_module import run_eda
 from ai_summary_module import generate_ai_summary
@@ -39,6 +37,7 @@ uploaded = st.file_uploader(
     type=["csv", "xlsx", "xls", "pdf"],
     accept_multiple_files=False
 )
+
 
 def safe_load_file(uploaded_file):
     """Safely load CSV, XLSX, XLS, or PDF with dependency checks and clear feedback."""
@@ -106,14 +105,46 @@ def safe_load_file(uploaded_file):
         return None
 
 
-# --- Load and preview file ---
+# --- Main logic ---
 if uploaded:
     df = safe_load_file(uploaded)
 
     if df is not None:
         st.dataframe(df.head())
+
+        # ✅ Continue with analysis
+        st.divider()
+        st.subheader("🧹 Data Cleaning")
+        df_clean = auto_data_clean(df)
+
+        if df_clean is not None:
+            # 2️⃣ Detect dataset type
+            sector = detect_dataset_category(df_clean)
+            st.info(f"🧭 Detected dataset category: **{sector}**")
+
+            # 3️⃣ EDA
+            st.subheader("📈 Exploratory Data Analysis")
+            df_for_ai = run_eda(df_clean)
+
+            # 4️⃣ AI Summary
+            st.subheader("🧠 AI Dataset Summary")
+            ai_summary, insights = generate_ai_summary(client, df_clean, sector)
+            st.markdown(ai_summary)
+
+            # 5️⃣ Chat
+            st.subheader("💬 Basic Dataset Chat")
+            launch_basic_chat(client, ai_summary, insights, df_for_ai, sector)
+
+            # 6️⃣ Wrap-up
+            st.markdown("""
+            ---
+            ### 🚀 Next Steps
+            For deeper **AI-driven analytics**, **predictive modeling**, or **custom dashboards**,  
+            please **[contact or hire me](#)** to unlock the advanced modules.
+            ---
+            """)
+
     else:
         st.stop()
 else:
     st.info("👆 Upload a dataset to begin your analysis.")
-
